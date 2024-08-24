@@ -70,7 +70,9 @@ class DinoVisionTower(BaseVisionTower):
         self._image_size = res
         self._interp_size = interp
         self._patch_size = 14  # default patch size
-
+        if self.vision_tower_name=="facebook/dinov2-giant":
+            self.vision_tower_name="/data/MODEL/facebook/dinov2-giant/"
+            print("load from local file:",self.vision_tower_name)
         if not self.delay_load:
             self.load_model()
         else:

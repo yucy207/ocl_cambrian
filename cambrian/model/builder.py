@@ -26,12 +26,13 @@ from cambrian.model.language_model.cambrian_llama import CambrianLlamaForCausalL
 from cambrian.model.language_model.cambrian_mistral import CambrianMistralForCausalLM
 
 
+# def load_pretrained_model(model_path, model_base, model_name, load_8bit=False, load_4bit=False, device_map="cuda:3", device="cuda", use_flash_attn=False, **kwargs):
 def load_pretrained_model(model_path, model_base, model_name, load_8bit=False, load_4bit=False, device_map="auto", device="cuda", use_flash_attn=False, **kwargs):
     kwargs = {"device_map": device_map, **kwargs}
 
     if device != "cuda":
         kwargs['device_map'] = {"": device}
-
+        
     if load_8bit:
         kwargs['load_in_8bit'] = True
     elif load_4bit:
@@ -118,6 +119,7 @@ def load_pretrained_model(model_path, model_base, model_name, load_8bit=False, l
             else:
                 logger.info(f'Loading Cambrian from {model_path}')
                 tokenizer = AutoTokenizer.from_pretrained(model_path, use_fast=False)
+                # print("HERE!!!",model_path, flush=True)
                 model = CambrianLlamaForCausalLM.from_pretrained(
                     model_path,
                     low_cpu_mem_usage=True,
@@ -157,8 +159,12 @@ def load_pretrained_model(model_path, model_base, model_name, load_8bit=False, l
         model.resize_token_embeddings(len(tokenizer))
 
         vision_tower_aux_list = model.get_vision_tower_aux_list()
-
+        # print("model.config!!!",model.config)
+        # vision_tower_aux_list=vision_tower_aux_list[1:2]
+        # print("vision_tower_aux_list",vision_tower_aux_list)
         for vision_tower_aux in vision_tower_aux_list:
+            print("device_map:",device_map)
+            print("device:",device)
             if not vision_tower_aux.is_loaded:
                 vision_tower_aux.load_model(device_map=device_map)
             vision_tower_aux.to(device=device, dtype=torch.float16)

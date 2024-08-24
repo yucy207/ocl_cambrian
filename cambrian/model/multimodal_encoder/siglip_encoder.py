@@ -50,7 +50,11 @@ class SiglipVisionTower(ClipVisionTower):
 
     def load_model(self, device_map=None):
         self.vision_model = "siglip"
-        clip_model, processor = create_model_from_pretrained(self.vision_tower_name)
+        if self.vision_tower_name=="hf-hub:timm/ViT-SO400M-14-SigLIP-384":
+            print("load from local file: /home/lihong/yuchenyang/ViT-SO400M-14-SigLIP-384/")
+            clip_model, processor = create_model_from_pretrained("ViT-SO400M-14-SigLIP-384",pretrained="/home/lihong/yuchenyang/ViT-SO400M-14-SigLIP-384/open_clip_pytorch_model.bin")
+        else:
+            clip_model, processor = create_model_from_pretrained(self.vision_tower_name)
 
         self.vision_tower = clip_model.visual.trunk
         self.vision_tower.output_tokens = True

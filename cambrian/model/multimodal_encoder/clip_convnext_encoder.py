@@ -82,7 +82,12 @@ class CLIPConvNextTower(BaseVisionTower):
         """
         assert "clip-convnext" in self.vision_tower_name.lower()
         self.vision_model = "convnext"
-        clip_model, processor = create_model_from_pretrained(self.vision_tower_name)
+        if self.vision_tower_name=="hf-hub:laion/CLIP-convnext_xxlarge-laion2B-s34B-b82K-augreg-soup":
+            print("load from local file: /data/MODEL/CLIP-convnext_xxlarge-laion2B-s34B-b82K-augreg-soup/")
+            clip_model, processor = create_model_from_pretrained("CLIP-convnext_xxlarge-laion2B-s34B-b82K-augreg-soup",pretrained="/data/MODEL/CLIP-convnext_xxlarge-laion2B-s34B-b82K-augreg-soup/open_clip_pytorch_model.bin")
+        else:
+            print("HERE!!!",self.vision_tower_name)
+            clip_model, processor = create_model_from_pretrained(self.vision_tower_name)
         processor.transforms[0].size = self._image_size
         processor.transforms[1].size = (self._image_size, self._image_size)
         self.image_processor = ProcessorWrapper(processor, height=self._image_size, width=self._image_size)

@@ -30,6 +30,10 @@ class ClipVisionTower(BaseVisionTower):
         super(ClipVisionTower, self).__init__(vision_tower_name, args, delay_load)
         base_model_name, interp = extract_interp(vision_tower_name)
         self.vision_tower_name = base_model_name
+        if self.vision_tower_name=="openai/clip-vit-large-patch14-336":
+            self.vision_tower_name="/home/lihong/yuchenyang/clip-vit-large-patch14-336/"
+            # self.vision_tower_name="/data/MODEL/openai_clip/clip-vit-large-patch14-336/"
+            print("load from local file:",self.vision_tower_name)
         self._interp_size = interp 
         if not self.delay_load:
             self.load_model()
