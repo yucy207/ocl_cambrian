@@ -30,9 +30,9 @@ os.environ['TRANSFORMERS_OFFLINE']="1"
 
 # cambrian-8b
 conv_mode = "llama_3" 
-gpu_id=2
+gpu_id=0
 device_used="cuda:{}".format(gpu_id)
-torch.cuda.set_device(gpu_id)
+# torch.cuda.set_device(gpu_id)
 # cambrian-34b
 # conv_mode = "chatml_direct"
 
@@ -76,7 +76,7 @@ model_name = get_model_name_from_path(model_path)
 # print(model_name)
 # torch.cuda.empty_cache()
 tokenizer, model, image_processor, context_len = load_pretrained_model(model_path, None, model_name,device_map=device_used)
-
+# print("asd!!!!!!!!!!!!!!!!!",context_len)
 def decorate(func):
     def flush_print(*args, **kwargs):
         return func(*args, **kwargs, flush=True)
@@ -129,12 +129,19 @@ def mAP_evaluator(prediction, gt_attr, store_ap=None, return_vec=False):
         mAP = np.nanmean(ap)
         return mAP * 100
 
-def load_class_json(name):
-    with open(os.path.join("/data/DATA/OCL_DATA/OCL_data/data/resources",f"OCL_class_{name}.json"),"r") as fp:
-        return json.load(fp)
+# def load_class_json(name):
+#     with open(os.path.join("/data/DATA/OCL_DATA/OCL_data/data/resources",f"OCL_class_{name}.json"),"r") as fp:
+#         return json.load(fp)
     
-attr_list = load_class_json("attribute")
-print(len(attr_list))
+# attr_list = load_class_json("attribute")
+# print(len(attr_list))
+
+aff_list = []
+with open("/data/DATA/OCL_DATA/OCL_data/data/resources/OCL_class_affordance_word.txt", 'r') as file:
+    for line in file:
+        cleaned_word = line.strip()
+        aff_list.append(cleaned_word)
+attr_list=aff_list
 
 with open('/data/DATA/OCL_DATA/OCL_data/data/resources/OCL_annot_val.pkl', 'rb') as f:
     val_data = pickle.load(f)
@@ -144,6 +151,7 @@ def filter_response_to_ids(cand_list, response):
     # 使用正则表达式提取单引号内的内容
     words = re.findall(r"'(.*?)'", response)
     # response存在重复的情况
+    n_response=len(words)
     words=list(dict.fromkeys(words))
     clearned_response = []
     for word in words:
@@ -153,6 +161,11 @@ def filter_response_to_ids(cand_list, response):
         unappear_attribute = list(set(cand_list)-set(clearned_response))
         random.shuffle(unappear_attribute)
         clearned_response += unappear_attribute
+    print("#"*10)
+    print(f"response: {n_response}\nuniq response: {len(words)}\nclearned response: {len(clearned_response)}")
+    if len(clearned_response) < len(cand_list):
+        print(f"unappear attribute: {len(unappear_attribute)}")
+    print("#"*10)
     return clearned_response
 
 def linear(x, k=200.):
@@ -161,6 +174,10 @@ def linear(x, k=200.):
 
 prediction = []
 gt_attr = []
+key_word = 'aff'
+kw = "affordances"
+# key_word = 'attr'
+# kw = "attributes"
 output_dir="/home/lihong/yuchenyang/cambrian/OCL_output/"
 with open(output_dir+'response.txt', 'w',) as r, open(output_dir+'clearned_response.csv', 'w', newline='') as cr, open(output_dir+'prediction.csv', 'w', newline='') as p, open(output_dir+'gt_attr.csv', 'w', newline='') as g:
     cr_writer = csv.writer(cr)
@@ -172,23 +189,31 @@ with open(output_dir+'response.txt', 'w',) as r, open(output_dir+'clearned_respo
     # while True:
         # sam_index = input("sample index: ")
         # sample=val_data[int(sam_index)]
-    for sam_index in range(len(val_data)):
+    # for sam_index in range(len(val_data)):
+    for sam_index in range(5000):
         sample=val_data[sam_index]
         image_path = os.path.join("/data/DATA/OCL_DATA/OCL_data/data",sample['name'])
         sam_obj=sample['objects'][0]['obj']
         print(f"################################\nindex: {sam_index}; image_path: {image_path}; obj: {sam_obj}")
-        for attr in sample['objects'][0]['attr']:
+        for attr in sample['objects'][0][key_word]:
             print(f"attr: {attr_list[attr]}; ",end="")
         print("\n################################")
         gt = np.zeros(len(attr_list), dtype=int)
-        gt[sample['objects'][0]['attr']]=1
+        gt[sample['objects'][0][key_word]]=1
         g_writer.writerow(gt.tolist())
         gt_attr.append(gt.tolist())
-        question = f"Find the most likely attributes in this image of the {sam_obj} and rank {attr_list} in descending order of probability. The result needs to be given in the form of a list."
-        # question1 = input("question1: ")The result needs to be given in the form of a list (must be the prototype in the list).
+        # question = f"Identify the {sam_obj}’s {kw}, and rank {attr_list} from the most relevant to the least. The result needs to be given in the form of a list."
+        # question = f"Sort {attr_list} by the likelihood of the {sam_obj}’s {kw}. The result needs to be given in the form of a list."
+        # prompt for attr
+        # question = f"Find the most likely {kw} in this image of the {sam_obj} and rank {attr_list} in descending order of probability. The result needs to be given in the form of a list."
+        # prompt for aff
+        question = f"Analyze this image of the {sam_obj}, find the most likely {kw} from {attr_list} and rank in descending order of probability. The result needs to be given in the form of a python list."
+        # question1 = input("question1: ")#The result needs to be given in the form of a python list.
         # question += question1
+        # print("###Q:",question)
         image = Image.open(image_path).convert('RGB')
         input_ids, image_tensor, image_sizes, prompt = process(image, question, tokenizer, image_processor, model.config)
+        # print("prompt!!!!!!!!!!!!!!!!!",prompt)
         # input_ids = input_ids.to(device='cuda', non_blocking=True)
         input_ids = input_ids.to(device=device_used, non_blocking=True)
         with torch.no_grad():
@@ -200,15 +225,15 @@ with open(output_dir+'response.txt', 'w',) as r, open(output_dir+'clearned_respo
                 temperature=temperature,
                 num_beams=1,
                 # max_new_tokens=128,
-                max_new_tokens=512,
+                max_new_tokens=1024,
                 use_cache=True)
 
         response = tokenizer.batch_decode(output_ids, skip_special_tokens=True)[0].strip()
-        print(response)
+        print("###A:",response)
         r.write(f"{response}\n")
         clearned_response=filter_response_to_ids(attr_list, response)
         cr_writer.writerow(clearned_response)
-        index_response = [attr_list.index(x) for x in clearned_response]
+        index_response = [clearned_response.index(i) for i in attr_list]
         p_response=linear(index_response,len(index_response)).tolist()
         p_writer.writerow(p_response)
         prediction.append(p_response)

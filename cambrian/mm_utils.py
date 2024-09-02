@@ -183,7 +183,7 @@ def expand2square(pil_img, background_color):
 #     return new_images
 
 # multiple vision towers
-def process_images(images, image_processor, model_cfg):
+def process_images(images, image_processor, model_cfg, gpu_id=-1):
     processor_aux_list = image_processor
     new_images_aux_list = []
     for image in images:
@@ -197,7 +197,10 @@ def process_images(images, image_processor, model_cfg):
             image_aux_list.append(image_aux)
         new_images_aux_list.append(image_aux_list)
     new_images_aux_list = [list(batch_image_aux) for batch_image_aux in zip(*new_images_aux_list)]
-    new_images_aux_list = [torch.stack(image_aux).half().cuda() for image_aux in new_images_aux_list]
+    if gpu_id==-1:
+        new_images_aux_list = [torch.stack(image_aux).half().cuda() for image_aux in new_images_aux_list]
+    else:
+        new_images_aux_list = [torch.stack(image_aux).half().cuda(gpu_id) for image_aux in new_images_aux_list]
     return new_images_aux_list
 
 

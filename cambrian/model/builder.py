@@ -163,8 +163,8 @@ def load_pretrained_model(model_path, model_base, model_name, load_8bit=False, l
         # vision_tower_aux_list=vision_tower_aux_list[1:2]
         # print("vision_tower_aux_list",vision_tower_aux_list)
         for vision_tower_aux in vision_tower_aux_list:
-            print("device_map:",device_map)
-            print("device:",device)
+            # print("device_map:",device_map)
+            # print("device:",device)
             if not vision_tower_aux.is_loaded:
                 vision_tower_aux.load_model(device_map=device_map)
             vision_tower_aux.to(device=device, dtype=torch.float16)
