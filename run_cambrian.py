@@ -32,7 +32,7 @@ conv_mode = "llama_3"
 OCL_DATA_PATH = '/data/DATA/OCL_DATA/OCL_data/data/resources'
 OCL_IMG_PREFIX = '/data/DATA/OCL_DATA/OCL_data/data'
 MODEL_PATH = os.path.expanduser("/data/MODEL/Cambrian-1/cambrian-8b")
-GPU_MEM_NEED = 23 * 1024
+GPU_MEM_NEED = 22 * 1024
 
 warnings.filterwarnings('ignore')
 
@@ -137,9 +137,18 @@ def load_model(model_path=MODEL_PATH, gpu_id=0):
     model_name = get_model_name_from_path(model_path)
     device_used="cuda:{}".format(gpu_id)
     tokenizer, model, image_processor, _ = load_pretrained_model(model_path, None, model_name,device_map=device_used)
-    print(model)
+                #     tokenizer = AutoTokenizer.from_pretrained(model_path, use_fast=False)
+                # # print("HERE!!!",model_path, flush=True)
+                # model = CambrianLlamaForCausalLM.from_pretrained(
+                #     model_path,
+                #     low_cpu_mem_usage=True,
+                #     **kwargs
+                # )
+    # super().generate -> transformers.generation.utils.GenerationMixin.generate
+    # prepare_inputs_labels_for_multimodal /home/lihong/yuchenyang/cambrian/cambrian/model/cambrian_arch.py 
+    print("model",model)
     print("model.config",model.config)
-    exit()
+    exit('ite test')
     return tokenizer, model, image_processor
 
 def run_model(tokenizer, model, image_processor, output_dir, cand_n, gpu_id=0, sample_num=0, start=0,key_word='attr',kw = "attributes"):
