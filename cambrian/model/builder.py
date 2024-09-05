@@ -159,7 +159,7 @@ def load_pretrained_model(model_path, model_base, model_name, load_8bit=False, l
         model.resize_token_embeddings(len(tokenizer))
 
         vision_tower_aux_list = model.get_vision_tower_aux_list()
-        # print("model.config!!!",model.config)
+        print("model.config!!!",model.config)
         # vision_tower_aux_list=vision_tower_aux_list[1:2]
         # print("vision_tower_aux_list",vision_tower_aux_list)
         for vision_tower_aux in vision_tower_aux_list:

@@ -435,6 +435,72 @@ class CambrianLlamaForCausalLM(LlamaForCausalLM, CambrianMetaForCausalLM):
 
 
     @torch.no_grad()
+    def get_image_features(
+        self,
+        inputs: Optional[torch.Tensor] = None,
+        images: Optional[torch.Tensor] = None,
+        image_sizes: Optional[torch.Tensor] = None,
+        **kwargs,
+    ) -> Union[GenerateOutput, torch.LongTensor]:
+        position_ids = kwargs.pop("position_ids", None)
+        attention_mask = kwargs.pop("attention_mask", None)
+        if "inputs_embeds" in kwargs:
+            raise NotImplementedError("`inputs_embeds` is not supported")
+
+        image_features = self.prepare_inputs_to_image_features(
+            inputs,
+            position_ids,
+            attention_mask,
+            None,
+            None,
+            images,
+            image_sizes=image_sizes
+        )
+
+        return image_features
+    
+    def get_inputs_embeds(
+        self,
+        inputs: Optional[torch.Tensor] = None,
+        images: Optional[torch.Tensor] = None,
+        image_sizes: Optional[torch.Tensor] = None,
+        **kwargs,
+    ):
+        position_ids = kwargs.pop("position_ids", None)
+        attention_mask = kwargs.pop("attention_mask", None)
+        if "inputs_embeds" in kwargs:
+            raise NotImplementedError("`inputs_embeds` is not supported")
+
+        if images is not None:
+            (
+                inputs,
+                position_ids,
+                attention_mask,
+                _,
+                inputs_embeds,
+                _,
+                vision_tower_aux_feature_list,
+                vision_tower_aux_attention_masks_list,
+                final_vision_feature_size,
+                global_context_feature,
+            ) = self.prepare_inputs_labels_for_multimodal(
+                inputs,
+                position_ids,
+                attention_mask,
+                None,
+                None,
+                images,
+                image_sizes=image_sizes
+            )
+            self.vision_tower_aux_feature_list = vision_tower_aux_feature_list
+            self.vision_tower_aux_attention_masks_list = vision_tower_aux_attention_masks_list
+            self.final_vision_feature_size = final_vision_feature_size
+            self.global_context_feature = global_context_feature
+        else:
+            inputs_embeds = self.get_model().embed_tokens(inputs)
+
+        return self.vision_tower_aux_feature_list,self.vision_tower_aux_attention_masks_list,self.final_vision_feature_size,self.global_context_feature, self.inputs_embeds
+
     def generate(
         self,
         inputs: Optional[torch.Tensor] = None,

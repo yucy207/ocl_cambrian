@@ -146,9 +146,9 @@ def load_model(model_path=MODEL_PATH, gpu_id=0):
                 # )
     # super().generate -> transformers.generation.utils.GenerationMixin.generate
     # prepare_inputs_labels_for_multimodal /home/lihong/yuchenyang/cambrian/cambrian/model/cambrian_arch.py 
-    print("model",model)
-    print("model.config",model.config)
-    exit('ite test')
+    # print("model",model)
+    # print("model.config",model.config)
+    # exit('ite test')
     return tokenizer, model, image_processor
 
 def run_model(tokenizer, model, image_processor, output_dir, cand_n, gpu_id=0, sample_num=0, start=0,key_word='attr',kw = "attributes"):
@@ -161,6 +161,8 @@ def run_model(tokenizer, model, image_processor, output_dir, cand_n, gpu_id=0, s
         g_writer = csv.writer(g)
         start_time = time.time()
         response_num,unappear_num=0,0
+        mean_feature_for_attr=dict()
+        mean_feature_for_attr_count=dict(int)
         for sam_index in range(start,start+sample_num):
             sample=val_data[sam_index]
             image_path = os.path.join(OCL_IMG_PREFIX,sample['name'])
@@ -195,7 +197,27 @@ def run_model(tokenizer, model, image_processor, output_dir, cand_n, gpu_id=0, s
             input_ids, image_tensor, image_sizes, _ = process(image, question, tokenizer, image_processor, model.config, gpu_id)
             input_ids = input_ids.to(device=device_used, non_blocking=True)
             with torch.inference_mode():
-                output_ids = model.generate(
+            #     output_ids = model.get_inputs_embeds(
+            #         input_ids,
+            #         images=image_tensor,
+            #         image_sizes=image_sizes,
+            #         do_sample=True if temperature > 0 else False,
+            #         temperature=temperature,
+            #         num_beams=1,
+            #         # max_new_tokens=1024,
+            #         max_new_tokens=512,
+            #         use_cache=True)
+
+            # # return self.vision_tower_aux_feature_list,self.vision_tower_aux_attention_masks_list,self.final_vision_feature_size,self.global_context_feature
+            # # global_context_feature: 像素点数量=image_token_len=24*24=576
+            # # output_ids[3].mean(0).view(bs, 1, 1, -1)
+            # print("###vision_tower_aux_feature_list:",output_ids[0])
+            # print("###vision_tower_aux_attention_masks_list:",output_ids[1])
+            # print("###final_vision_feature_size:",output_ids[2])
+            # print("###global_context_feature:",output_ids[3])
+            # print("###inputs_embeds:",inputs_embeds[4])
+            
+                image_features = model.get_image_features(
                     input_ids,
                     images=image_tensor,
                     image_sizes=image_sizes,
@@ -206,21 +228,38 @@ def run_model(tokenizer, model, image_processor, output_dir, cand_n, gpu_id=0, s
                     max_new_tokens=512,
                     use_cache=True)
 
-            response = tokenizer.batch_decode(output_ids, skip_special_tokens=True)[0].strip()
-            print("###A:",response)
-            r.write(f"{response}\n")
-            clearned_response,stat=filter_response_to_ids(candidate_list, response, shuffle=args.noshuffle)
-            print("stat",stat)
-            response_num+=stat[2]
-            unappear_num+=stat[3]
-            cr_writer.writerow(clearned_response)
-            index_response = [clearned_response.index(i) for i in candidate_list]
-            p_response=linear(index_response,len(clearned_response)).tolist()
-            p_writer.writerow(p_response)
-            r.flush()
-            cr.flush()
-            p.flush()
-            g.flush()
+            # image_features = image_features.view(bs, final_height, final_width, -1)
+            # image_features = image_features.view(bs, final_height * final_width, -1)
+            print("###image_features:",image_features)
+            # image_features.shape: bs*576*1024
+            mean_feature=image_features.mean(1)
+            # 是否对像素点水平求均值
+            print("###mean_feature:",mean_feature)
+            for i in skw:
+                if i not in mean_feature_for_attr:
+                    mean_feature_for_attr_count[i]=0
+                    mean_feature_for_attr[i]=torch.zeros_like(mean_feature)
+                mean_feature_for_attr[i]+=mean_feature
+                mean_feature_for_attr_count[i]+=1
+            
+            for i in mean_feature_for_attr.keys():
+                mean_feature_for_attr[i]=mean_feature_for_attr[i]/mean_feature_for_attr_count[i]
+            
+            # response = tokenizer.batch_decode(output_ids, skip_special_tokens=True)[0].strip()
+            # print("###A:",response)
+            # r.write(f"{response}\n")
+            # clearned_response,stat=filter_response_to_ids(candidate_list, response, shuffle=args.noshuffle)
+            # print("stat",stat)
+            # response_num+=stat[2]
+            # unappear_num+=stat[3]
+            # cr_writer.writerow(clearned_response)
+            # index_response = [clearned_response.index(i) for i in candidate_list]
+            # p_response=linear(index_response,len(clearned_response)).tolist()
+            # p_writer.writerow(p_response)
+            # r.flush()
+            # cr.flush()
+            # p.flush()
+            # g.flush()
         end_time = time.time()
     return start_time,end_time,sample_num,response_num,unappear_num
 

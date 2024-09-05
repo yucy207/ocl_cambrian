@@ -337,6 +337,81 @@ class CambrianMetaForCausalLM(ABC):
             image_aux_features_list.append(image_aux_features)
         return image_aux_features_list
 
+    def prepare_inputs_to_image_features(
+        self, input_ids, position_ids, attention_mask, past_key_values, labels,
+        images, image_aux_attention_masks_list=None, image_sizes=None
+    ):
+        # vision_tower = self.get_vision_tower()
+        vision_tower_aux_list = self.get_model().get_vision_tower_aux_list()
+        if vision_tower_aux_list is None or images is None or input_ids.shape[1] == 1:
+            return input_ids, position_ids, attention_mask, past_key_values, None, labels, None, None, None, None
+
+        image_aux_list = images
+
+        bs = image_aux_list[0].shape[0]
+        dtype = image_aux_list[0].dtype
+
+        image_token_len = self.get_model().config.image_token_len
+        query_num_list = self.get_model().config.query_num_list
+
+        final_height = final_width  = int(image_token_len**0.5)
+
+        final_image_features_list = []
+
+        # only needed for sva
+        vision_tower_aux_feature_list_final = None
+        vision_tower_aux_attention_masks_list_final = None
+        global_context_feature_final = None
+
+        image_aux_features_list = self.encode_images(image_aux_list)
+
+        if self.get_model().config.mm_projector_type == 'sva':
+            vision_tower_aux_feature_list = []
+            vision_tower_aux_attention_masks_list = []
+            # get vision tokens from each vision tower
+            for aux_i in range(len(vision_tower_aux_list)):
+                image_aux_features = image_aux_features_list[aux_i]
+
+                image_aux_features = getattr(self.get_model(), 'mm_projector_aux_{}'.format(aux_i))(image_aux_features).to(dtype)
+                if aux_i == 0:
+                    global_context_feature = image_aux_features.mean(1).view(bs, 1, 1, -1)
+
+                vision_tower_aux_feature_list.append(image_aux_features)
+
+            # perform vision sampling for each query group
+            for query_group_i, query_num in enumerate(query_num_list):
+                query_features_i = self.get_model().vision_query[query_group_i, :].view(1, 1, 1, -1).expand(bs, query_num, -1, -1)
+                global_context_feature_i = global_context_feature.expand(-1, query_num, 1, -1).flatten(0,1)
+                query_side_len = int(query_num**0.5)
+                if IS_XLA_AVAILABLE:
+                    vision_tower_aux_feature_list_i, vision_tower_aux_attention_masks_list_i = self.rearrange_vision_tower_features_train(vision_tower_aux_feature_list, image_aux_attention_masks_list, query_side_len)
+                else:
+                    vision_tower_aux_feature_list_i, vision_tower_aux_attention_masks_list_i = self.rearrange_vision_tower_features_inference(vision_tower_aux_feature_list, query_side_len,
+                        image_sizes)
+
+                query_features_i = getattr(self.get_model(), "vision_sampler_{}".format(query_group_i))(query_features_i.flatten(0,1), global_context_feature_i, *vision_tower_aux_feature_list_i, *vision_tower_aux_attention_masks_list_i)
+                query_features_i = query_features_i.view(bs, query_num, -1)
+                # interpolate to the final target size
+                if query_side_len != final_height:
+                    query_features_i = query_features_i.permute(0, 2, 1).contiguous().view(bs, -1, query_side_len, query_side_len)
+                    query_features_i = F.interpolate(query_features_i.float(), 
+                                                    size=(final_height, final_width), 
+                                                    mode='bilinear', 
+                                                    align_corners=False).to(dtype=query_features_i.dtype)
+                    query_features_i = query_features_i.permute(0, 2, 3, 1).contiguous().flatten(1, 2)
+                final_image_features_list.append(query_features_i)
+
+            if IS_XLA_AVAILABLE:
+                vision_tower_aux_feature_list_final, vision_tower_aux_attention_masks_list_final = self.rearrange_vision_tower_features_train(vision_tower_aux_feature_list, image_aux_attention_masks_list, final_height)
+                global_context_feature_final = global_context_feature.expand(-1, final_height*final_width, 1, -1).flatten(0,1)
+        else:
+            final_image_features_list = image_aux_features_list
+
+        image_features = torch.cat(final_image_features_list, -1)
+        image_features = self.get_model().mm_projector(image_features).to(dtype)
+        
+        return image_features
+
     def prepare_inputs_labels_for_multimodal(
         self, input_ids, position_ids, attention_mask, past_key_values, labels,
         images, image_aux_attention_masks_list=None, image_sizes=None
@@ -409,6 +484,8 @@ class CambrianMetaForCausalLM(ABC):
 
         image_features = torch.cat(final_image_features_list, -1)
         image_features = self.get_model().mm_projector(image_features).to(dtype)
+        # print image_features HERE
+        # CHANGE image_features HERE
 
         if IS_XLA_AVAILABLE:
             image_features = image_features.view(image_features.shape[0], final_height, final_width, -1)
